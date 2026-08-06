@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.git/
+.github/
+data/*.db
+data/incoming/*
+data/archive/*
+data/rejected/*
+!data/incoming/.gitkeep
+!data/archive/.gitkeep
+!data/rejected/.gitkeep
+*.zip

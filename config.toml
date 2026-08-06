@@ -1,0 +1,45 @@
+[app]
+name = "VendorSync Hub"
+database_path = "data/vendorsync.db"
+incoming_dir = "data/incoming"
+archive_dir = "data/archive"
+rejected_dir = "data/rejected"
+scan_interval_seconds = 1.0
+worker_batch_size = 10
+max_file_size_mb = 20
+max_job_attempts = 3
+conflict_price_threshold_percent = 20
+
+[[suppliers]]
+id = "alpha"
+name = "Alpha Supply"
+priority = 10
+filename_pattern = "(?i).*alpha.*\\.csv$"
+format = "csv"
+currency = "USD"
+
+[suppliers.mapping]
+sku = "item_code"
+name = "description"
+description = "details"
+price = "cost"
+stock = "available"
+category = "group"
+currency = "currency_code"
+
+[[suppliers]]
+id = "northstar"
+name = "Northstar Parts"
+priority = 20
+filename_pattern = "(?i).*northstar.*\\.json$"
+format = "json"
+currency = "USD"
+
+[suppliers.mapping]
+sku = "sku"
+name = "title"
+description = "summary"
+price = "pricing.amount"
+stock = "inventory.qty"
+category = "department"
+currency = "pricing.currency"

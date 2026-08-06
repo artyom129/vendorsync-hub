@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <div>
+    <span class="eyebrow">Catalog operations control plane</span>
+    <h1>Turn inconsistent supplier feeds into one reliable product catalog.</h1>
+    <p>Normalize CSV and JSON, track versions, detect conflicts, process queued jobs in the background, and preserve a complete audit trail.</p>
+  </div>
+  <div class="actions">
+    <a class="button primary" href="/catalog">Open catalog</a>
+    <a class="button" href="/exports/catalog.xlsx">Export Excel</a>
+  </div>
+</section>
+
+<section class="stats">
+  <article><span>Suppliers</span><strong>{{ stats.suppliers }}</strong><small>Configured sources</small></article>
+  <article><span>Products</span><strong>{{ stats.catalog_products }}</strong><small>Unified SKUs</small></article>
+  <article><span>Conflicts</span><strong>{{ stats.conflicts }}</strong><small>Multiple offers</small></article>
+  <article><span>Pending jobs</span><strong>{{ stats.pending_jobs }}</strong><small>Queue activity</small></article>
+  <article><span>Versions</span><strong>{{ stats.versions }}</strong><small>Historical snapshots</small></article>
+</section>
+
+<div class="grid">
+  <section class="panel">
+    <div class="panel-head"><div><span class="eyebrow">Interactive demo</span><h2>Import feeds</h2></div></div>
+    <p class="muted">Each button queues and processes a real supplier feed.</p>
+    <div class="demo">
+      <form method="post" action="/demo/alpha"><button class="good" type="submit"><b>Import Alpha feed</b><span>Initial CSV catalog</span></button></form>
+      <form method="post" action="/demo/northstar"><button class="blue" type="submit"><b>Import Northstar feed</b><span>Nested JSON with conflicts</span></button></form>
+      <form method="post" action="/demo/alpha_update"><button class="warn" type="submit"><b>Import Alpha update</b><span>Price, stock, and SKU changes</span></button></form>
+      <form method="post" action="/demo/invalid"><button class="bad" type="submit"><b>Import invalid feed</b><span>Validation rejection and dead-letter state</span></button></form>
+    </div>
+    <form class="upload" method="post" action="/upload" enctype="multipart/form-data">
+      <label class="control-label" for="supplier_id">Supplier</label>
+      <select id="supplier_id" name="supplier_id">
+        <option value="">Auto-detect supplier</option>
+        {% for supplier in suppliers %}<option value="{{ supplier.id }}">{{ supplier.name }}</option>{% endfor %}
+      </select>
+      <label class="file-control" for="feed_file"><span>CSV or JSON feed</span><input id="feed_file" type="file" name="file" accept=".csv,.json" required></label>
+      <button class="button primary" type="submit">Queue import</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><div><span class="eyebrow">Current state</span><h2>Unified catalog</h2></div><a href="/catalog">View all →</a></div>
+    <div class="table"><table><thead><tr><th>SKU</th><th>Product</th><th>Supplier</th><th>Price</th><th>Stock</th><th>Status</th></tr></thead><tbody>
+      {% for row in catalog %}<tr><td><a href="/products/{{ row.sku }}">{{ row.sku }}</a></td><td><b>{{ row.name }}</b><small>{{ row.category }}</small></td><td>{{ row.supplier_name }}</td><td>{{ row.currency }} {{ row.price }}</td><td>{{ row.stock }}</td><td>{% if row.has_conflict %}<span class="pill warning">{{ row.offer_count }} offers</span>{% else %}<span class="pill success">clean</span>{% endif %}</td></tr>
+      {% else %}<tr><td class="empty" colspan="6">Import Alpha and Northstar demo feeds.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+</div>
+
+<div class="triple">
+  <section class="panel"><div class="panel-head"><div><span class="eyebrow">Queue</span><h2>Recent jobs</h2></div><a href="/jobs">All jobs →</a></div>{% for job in jobs %}<div class="list"><i class="{{ job.status }}"></i><div><b>#{{ job.id }} {{ job.job_type }}</b><small>{{ job.status }} · {{ job.attempts }}/{{ job.max_attempts }}</small></div></div>{% else %}<p class="muted">No jobs.</p>{% endfor %}</section>
+  <section class="panel"><div class="panel-head"><div><span class="eyebrow">History</span><h2>Versions</h2></div><a href="/versions">Details →</a></div>{% for version in versions %}<div class="list"><em>v{{ version.version_number }}</em><div><b>{{ version.supplier_name }}</b><small>{{ version.product_count }} products · +{{ version.new_items }} · {{ version.changed_items }} changed</small></div></div>{% else %}<p class="muted">No versions.</p>{% endfor %}</section>
+  <section class="panel"><div class="panel-head"><div><span class="eyebrow">Audit</span><h2>Recent events</h2></div></div>{% for event in events %}<div class="list"><i class="{{ event.severity }}"></i><div><b>{{ event.message }}</b><small>{{ event.created_at[:19] }}</small></div></div>{% else %}<p class="muted">No events.</p>{% endfor %}</section>
+</div>
+{% endblock %}
