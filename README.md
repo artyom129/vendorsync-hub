@@ -1,8 +1,4 @@
-<a id="english"></a>
-
 <div align="center">
-
-**🇬🇧 English** · [🇷🇺 Русский](#russian)
 
 # VendorSync Hub
 
@@ -165,46 +161,3 @@ This is a personal software engineering project. It contains no client data and 
 ## License
 
 MIT
-
----
-
-<a id="russian"></a>
-
-<div align="center">
-
-[🇬🇧 English](#english) · **🇷🇺 Русский**
-
-</div>
-
-# VendorSync Hub — Русская версия
-
-Крупный проект для автоматической загрузки и объединения каталогов поставщиков.
-
-## Что он делает
-
-- принимает CSV и JSON;
-- преобразует поля разных поставщиков в одну структуру;
-- проверяет SKU, цены, остатки и валюту;
-- блокирует повторные файлы;
-- создаёт версии каталогов;
-- показывает новые, изменённые и удалённые товары;
-- находит одинаковые SKU у разных поставщиков;
-- выбирает основное предложение по приоритету;
-- хранит очередь фоновых задач, автоматически запускает worker и разделяет временные и постоянные ошибки;
-- формирует CSV и Excel.
-
-## Запуск
-
-```bat
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-python seed_demo.py
-python run.py
-```
-
-Открыть `http://127.0.0.1:8000`.
-
-## Проверка качества
-
-Полный разбор исправлений находится в `docs/QUALITY_AUDIT.md`. Автоматические тесты запускаются командой `pytest -q`.
