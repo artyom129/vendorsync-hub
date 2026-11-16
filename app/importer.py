@@ -15,6 +15,22 @@ from .catalog import compare
 from .config import Settings, Supplier
 
 
+def parse_amount(text: str) -> Decimal:
+    """Read a price written as 1234.50, 1,234.50, 1.234,50 or 1 234,50."""
+    cleaned = re.sub(r"[\s']", "", text)
+    if "," in cleaned and "." in cleaned:
+        if cleaned.rfind(",") > cleaned.rfind("."):
+            cleaned = cleaned.replace(".", "").replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", "")
+    elif cleaned.count(",") > 1:
+        cleaned = cleaned.replace(",", "")
+    else:
+        cleaned = cleaned.replace(",", ".")
+    return Decimal(cleaned)
+
+
+
 class PermanentImportError(ValueError):
     """A feed error that should not be retried automatically."""
 
@@ -97,9 +113,9 @@ class Importer:
                     }
                 )
 
-            price_text = str(values.get("price") or "").strip().replace(",", ".")
+            price_text = str(values.get("price") or "").strip()
             try:
-                price = Decimal(price_text)
+                price = parse_amount(price_text)
                 if not price.is_finite() or price < 0:
                     raise InvalidOperation
             except (InvalidOperation, ValueError):

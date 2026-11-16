@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -13,9 +15,53 @@ class Worker:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.importer = Importer(settings)
+        # The background loop and a request can both ask for a run at once.
+        # Serialising them means a caller that waits finds its job finished.
+        self._lock = threading.Lock()
+
+    def scan_incoming(self) -> int:
+        """Queue feeds that were dropped into the incoming folder by hand.
+
+        A file is picked up once it has stopped changing for `settle_seconds`,
+        so a copy that is still in progress is never read half written.
+        """
+        folder = self.settings.incoming_dir
+        if not folder.exists():
+            return 0
+        owned = db.known_job_paths(self.settings.database_path)
+        queued = 0
+        for path in sorted(folder.iterdir()):
+            if not path.is_file() or path.suffix.lower() not in {".csv", ".json"}:
+                continue
+            if str(path.resolve()) in owned:
+                continue
+            if time.time() - path.stat().st_mtime < self.settings.settle_seconds:
+                continue
+            db.enqueue(
+                self.settings.database_path,
+                "import_feed",
+                None,
+                json.dumps({"path": str(path)}),
+                self.settings.max_job_attempts,
+            )
+            db.audit(
+                self.settings.database_path,
+                "feed_found",
+                "info",
+                f"{path.name} found in the incoming folder",
+            )
+            queued += 1
+        return queued
 
     def run_once(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return self._run_once()
+
+    def _run_once(self) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
+        db.recover_stale(
+            self.settings.database_path, self.settings.job_timeout_seconds
+        )
         for job in db.claim(
             self.settings.database_path,
             self.settings.worker_batch_size,

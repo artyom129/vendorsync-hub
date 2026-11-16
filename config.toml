@@ -8,6 +8,8 @@ scan_interval_seconds = 1.0
 worker_batch_size = 10
 max_file_size_mb = 20
 max_job_attempts = 3
+job_timeout_seconds = 300
+settle_seconds = 2
 conflict_price_threshold_percent = 20
 
 [[suppliers]]

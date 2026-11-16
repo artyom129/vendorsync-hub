@@ -1,10 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="hero">
+<section class="page">
   <div>
-    <span class="eyebrow">Catalog operations control plane</span>
-    <h1>Turn inconsistent supplier feeds into one reliable product catalog.</h1>
-    <p>Normalize CSV and JSON, track versions, detect conflicts, process queued jobs in the background, and preserve a complete audit trail.</p>
+    <h1>{{ stats.catalog_products }} products from {{ stats.suppliers }} suppliers</h1>
+    <p>{% if stats.conflicts %}{{ stats.conflicts }} of them are offered by more than one supplier. The winner follows supplier priority; the others stay visible.{% else %}Import a feed to build the first catalog version.{% endif %}</p>
   </div>
   <div class="actions">
     <a class="button primary" href="/catalog">Open catalog</a>
@@ -12,47 +11,68 @@
   </div>
 </section>
 
-<section class="stats">
-  <article><span>Suppliers</span><strong>{{ stats.suppliers }}</strong><small>Configured sources</small></article>
-  <article><span>Products</span><strong>{{ stats.catalog_products }}</strong><small>Unified SKUs</small></article>
-  <article><span>Conflicts</span><strong>{{ stats.conflicts }}</strong><small>Multiple offers</small></article>
-  <article><span>Pending jobs</span><strong>{{ stats.pending_jobs }}</strong><small>Queue activity</small></article>
-  <article><span>Versions</span><strong>{{ stats.versions }}</strong><small>Historical snapshots</small></article>
+<section class="stats" aria-label="Totals">
+  <article><span>Suppliers</span><strong>{{ stats.suppliers }}</strong><small>configured</small></article>
+  <article><span>Products</span><strong>{{ stats.catalog_products }}</strong><small>unique SKUs</small></article>
+  <article class="{% if stats.conflicts %}hot{% endif %}"><span>Multiple offers</span><strong>{{ stats.conflicts }}</strong><small>SKUs with 2+ suppliers</small></article>
+  <article class="{% if stats.dead_jobs %}hot{% endif %}"><span>Queue</span><strong>{{ stats.pending_jobs }}</strong><small>{{ stats.dead_jobs }} dead</small></article>
+  <article><span>Versions</span><strong>{{ stats.versions }}</strong><small>kept forever</small></article>
+</section>
+
+<section class="panel">
+  <div class="panel-head"><h2>Price ladder</h2><a href="/catalog?conflict=yes">All multi-supplier SKUs →</a></div>
+  <div class="ladder">
+    {% for c in conflicts %}
+    {% set lo = c.min_price|float %}{% set span = c.max_price|float - lo %}
+    <div class="rung {% if c.large_price_difference %}big{% endif %}">
+      <div class="who"><a class="sku" href="/products/{{ c.sku|urlencode }}">{{ c.sku }}</a><br>{{ c.offers[0].name }}</div>
+      <div class="rail">
+        {% for o in c.offers %}
+        <div class="stop {% if loop.first %}win{% endif %}" style="left:{% if span > 0 %}{{ ((o.price|float - lo) / span * 100)|round(1) }}{% else %}50{% endif %}%" title="{{ o.supplier_name }}"><span>{{ o.price }}</span></div>
+        {% endfor %}
+      </div>
+      <div class="gap"><b>{{ c.price_difference_percent }}%</b>{% if c.currency_mismatch %}currencies differ{% else %}spread{% endif %}</div>
+    </div>
+    {% else %}
+    <p class="empty">No SKU is offered by two suppliers yet. Import Alpha and Northstar below.</p>
+    {% endfor %}
+  </div>
+  {% if conflicts %}<p class="legend">Each dot is the price from one supplier. The filled dot is the offer that wins on priority.</p>{% endif %}
 </section>
 
 <div class="grid">
   <section class="panel">
-    <div class="panel-head"><div><span class="eyebrow">Interactive demo</span><h2>Import feeds</h2></div></div>
-    <p class="muted">Each button queues and processes a real supplier feed.</p>
+    <div class="panel-head"><h2>Unified catalog</h2><a href="/catalog">View all →</a></div>
+    <div class="table"><table><thead><tr><th>SKU</th><th>Product</th><th>Supplier</th><th>Price</th><th>Stock</th><th>Offers</th></tr></thead><tbody>
+      {% for row in catalog %}<tr><td><a class="sku" href="/products/{{ row.sku|urlencode }}">{{ row.sku }}</a></td><td><b>{{ row.name }}</b><small>{{ row.category }}</small></td><td>{{ row.supplier_name }}</td><td class="num">{{ row.currency }} {{ row.price }}</td><td class="num">{{ row.stock }}</td><td>{% if row.has_conflict %}<span class="pill warning">{{ row.offer_count }} offers</span>{% else %}<span class="pill success">single</span>{% endif %}</td></tr>
+      {% else %}<tr><td class="empty" colspan="6">Import a feed to fill the catalog.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Import a feed</h2></div>
+    <p class="muted" style="margin:0">Each button queues a real file and runs it through the worker. You can also drop a CSV or JSON file into <code>data/incoming</code>.</p>
     <div class="demo">
-      <form method="post" action="/demo/alpha"><button class="good" type="submit"><b>Import Alpha feed</b><span>Initial CSV catalog</span></button></form>
-      <form method="post" action="/demo/northstar"><button class="blue" type="submit"><b>Import Northstar feed</b><span>Nested JSON with conflicts</span></button></form>
-      <form method="post" action="/demo/alpha_update"><button class="warn" type="submit"><b>Import Alpha update</b><span>Price, stock, and SKU changes</span></button></form>
-      <form method="post" action="/demo/invalid"><button class="bad" type="submit"><b>Import invalid feed</b><span>Validation rejection and dead-letter state</span></button></form>
+      <form method="post" action="/demo/alpha"><button type="submit"><b>Alpha feed</b><span>CSV, 3 products</span></button></form>
+      <form method="post" action="/demo/northstar"><button type="submit"><b>Northstar feed</b><span>Nested JSON, overlaps with Alpha</span></button></form>
+      <form method="post" action="/demo/alpha_update"><button type="submit"><b>Alpha update</b><span>New prices, stock and one new SKU</span></button></form>
+      <form method="post" action="/demo/invalid"><button type="submit"><b>Broken feed</b><span>Rejected, ends in the dead-letter list</span></button></form>
     </div>
     <form class="upload" method="post" action="/upload" enctype="multipart/form-data">
       <label class="control-label" for="supplier_id">Supplier</label>
       <select id="supplier_id" name="supplier_id">
-        <option value="">Auto-detect supplier</option>
+        <option value="">Detect from file name</option>
         {% for supplier in suppliers %}<option value="{{ supplier.id }}">{{ supplier.name }}</option>{% endfor %}
       </select>
-      <label class="file-control" for="feed_file"><span>CSV or JSON feed</span><input id="feed_file" type="file" name="file" accept=".csv,.json" required></label>
+      <label class="file-control" for="feed_file"><span>CSV or JSON file</span><input id="feed_file" type="file" name="file" accept=".csv,.json" required></label>
       <button class="button primary" type="submit">Queue import</button>
     </form>
-  </section>
-
-  <section class="panel">
-    <div class="panel-head"><div><span class="eyebrow">Current state</span><h2>Unified catalog</h2></div><a href="/catalog">View all →</a></div>
-    <div class="table"><table><thead><tr><th>SKU</th><th>Product</th><th>Supplier</th><th>Price</th><th>Stock</th><th>Status</th></tr></thead><tbody>
-      {% for row in catalog %}<tr><td><a href="/products/{{ row.sku }}">{{ row.sku }}</a></td><td><b>{{ row.name }}</b><small>{{ row.category }}</small></td><td>{{ row.supplier_name }}</td><td>{{ row.currency }} {{ row.price }}</td><td>{{ row.stock }}</td><td>{% if row.has_conflict %}<span class="pill warning">{{ row.offer_count }} offers</span>{% else %}<span class="pill success">clean</span>{% endif %}</td></tr>
-      {% else %}<tr><td class="empty" colspan="6">Import Alpha and Northstar demo feeds.</td></tr>{% endfor %}
-    </tbody></table></div>
   </section>
 </div>
 
 <div class="triple">
-  <section class="panel"><div class="panel-head"><div><span class="eyebrow">Queue</span><h2>Recent jobs</h2></div><a href="/jobs">All jobs →</a></div>{% for job in jobs %}<div class="list"><i class="{{ job.status }}"></i><div><b>#{{ job.id }} {{ job.job_type }}</b><small>{{ job.status }} · {{ job.attempts }}/{{ job.max_attempts }}</small></div></div>{% else %}<p class="muted">No jobs.</p>{% endfor %}</section>
-  <section class="panel"><div class="panel-head"><div><span class="eyebrow">History</span><h2>Versions</h2></div><a href="/versions">Details →</a></div>{% for version in versions %}<div class="list"><em>v{{ version.version_number }}</em><div><b>{{ version.supplier_name }}</b><small>{{ version.product_count }} products · +{{ version.new_items }} · {{ version.changed_items }} changed</small></div></div>{% else %}<p class="muted">No versions.</p>{% endfor %}</section>
-  <section class="panel"><div class="panel-head"><div><span class="eyebrow">Audit</span><h2>Recent events</h2></div></div>{% for event in events %}<div class="list"><i class="{{ event.severity }}"></i><div><b>{{ event.message }}</b><small>{{ event.created_at[:19] }}</small></div></div>{% else %}<p class="muted">No events.</p>{% endfor %}</section>
+  <section class="panel"><div class="panel-head"><h2>Jobs</h2><a href="/jobs">All →</a></div>{% for job in jobs %}<div class="list"><i class="{{ job.status }}"></i><div><b>#{{ job.id }} {{ job.job_type }}</b><small>{{ job.status }} · attempt {{ job.attempts }} of {{ job.max_attempts }}</small></div></div>{% else %}<p class="muted">No jobs yet.</p>{% endfor %}</section>
+  <section class="panel"><div class="panel-head"><h2>Versions</h2><a href="/versions">Details →</a></div>{% for version in versions %}<div class="list"><em>v{{ version.version_number }}</em><div><b>{{ version.supplier_name }}</b><small>{{ version.product_count }} products · {{ version.new_items }} new · {{ version.changed_items }} changed</small></div></div>{% else %}<p class="muted">No versions yet.</p>{% endfor %}</section>
+  <section class="panel"><div class="panel-head"><h2>Audit log</h2></div>{% for event in events %}<div class="list"><i class="{{ event.severity }}"></i><div><b>{{ event.message }}</b><small>{{ event.created_at[:19]|replace("T", " ") }}</small></div></div>{% else %}<p class="muted">Nothing logged yet.</p>{% endfor %}</section>
 </div>
 {% endblock %}

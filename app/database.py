@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -131,10 +132,20 @@ def now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+class _Connection(sqlite3.Connection):
+    """Commits or rolls back like the stock connection, then closes the handle."""
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            return super().__exit__(exc_type, exc, tb)
+        finally:
+            self.close()
+
+
 def connect(db: str | Path) -> sqlite3.Connection:
     path = Path(db)
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path, timeout=20)
+    conn = sqlite3.connect(path, timeout=20, factory=_Connection)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA busy_timeout = 20000")
@@ -234,6 +245,51 @@ def claim(db: str | Path, limit: int = 10) -> list[dict[str, Any]]:
                 claimed.append(dict(fresh))
         conn.commit()
     return claimed
+
+
+def recover_stale(db: str | Path, older_than_seconds: float) -> int:
+    """Put jobs left in 'running' by a crashed process back in the queue.
+
+    A job that already used all its attempts goes to the dead-letter list.
+    """
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(seconds=older_than_seconds)
+    ).replace(microsecond=0).isoformat()
+    current = now()
+    with connect(db) as conn:
+        cursor = conn.execute(
+            """
+            UPDATE jobs
+            SET status = CASE WHEN attempts >= max_attempts
+                              THEN 'dead' ELSE 'retrying' END,
+                next_run_at = ?,
+                last_error = 'Worker stopped while the job was running',
+                completed_at = CASE WHEN attempts >= max_attempts
+                                    THEN ? ELSE NULL END
+            WHERE status = 'running' AND started_at <= ?
+            """,
+            (current, current, cutoff),
+        )
+    return cursor.rowcount
+
+
+def known_job_paths(db: str | Path) -> set[str]:
+    """Feed paths that any job, finished or not, already points at."""
+    with connect(db) as conn:
+        rows = conn.execute(
+            """
+            SELECT payload_json FROM jobs
+            """
+        ).fetchall()
+    paths: set[str] = set()
+    for row in rows:
+        try:
+            value = json.loads(row["payload_json"]).get("path")
+        except (ValueError, AttributeError):
+            continue
+        if value:
+            paths.add(str(Path(value).resolve()))
+    return paths
 
 
 def complete_job(db: str | Path, job_id: int) -> None:

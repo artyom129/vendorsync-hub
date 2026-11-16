@@ -31,6 +31,8 @@ class Settings:
     worker_batch_size: int
     max_file_size_mb: int
     max_job_attempts: int
+    job_timeout_seconds: float
+    settle_seconds: float
     conflict_price_threshold_percent: float
     suppliers: tuple[Supplier, ...]
 
@@ -89,6 +91,8 @@ def load_settings(path: str | Path | None = None) -> Settings:
         worker_batch_size=max(int(app.get("worker_batch_size", 10)), 1),
         max_file_size_mb=max(int(app.get("max_file_size_mb", 20)), 1),
         max_job_attempts=max(int(app.get("max_job_attempts", 3)), 1),
+        job_timeout_seconds=max(float(app.get("job_timeout_seconds", 300)), 1.0),
+        settle_seconds=max(float(app.get("settle_seconds", 2.0)), 0.0),
         conflict_price_threshold_percent=max(
             float(app.get("conflict_price_threshold_percent", 20)), 0.0
         ),

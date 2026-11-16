@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.0 - 2026-11-16
+
+- Files placed in `data/incoming` are queued automatically once they stop changing (`settle_seconds`).
+- Jobs left in `running` by a stopped process are recovered after `job_timeout_seconds`.
+- Prices in `1.234,50`, `1,234.50` and `1 234,50` form are accepted.
+- The background loop and API requests share one worker lock.
+- SKUs containing `/`, `#` or spaces open on the product page and in the API.
+- SQLite connections are closed after use.
+- `/health` no longer includes the database path.
+- New interface with a price ladder, light and dark themes.
+- README in English, Russian and Kazakh with screenshots.
+- 10 new tests (30 in total).
+
 ## 1.1.0 — 2026-08-06
 
 ### Reliability

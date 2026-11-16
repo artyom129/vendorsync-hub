@@ -11,3 +11,4 @@ data/rejected/*
 !data/archive/.gitkeep
 !data/rejected/.gitkeep
 *.xlsx
+.pytest_tmp/

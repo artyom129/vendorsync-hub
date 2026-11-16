@@ -163,6 +163,7 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
         async def worker_loop() -> None:
             while not stop.is_set():
                 try:
+                    await asyncio.to_thread(worker.scan_incoming)
                     await asyncio.to_thread(worker.run_once)
                 except Exception as exc:
                     db.audit(
@@ -188,7 +189,7 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         description="Supplier catalog normalization and synchronization control center.",
-        version="1.1.0",
+        version="1.2.0",
         lifespan=lifespan,
     )
     app.state.settings = settings
@@ -246,7 +247,7 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
             },
         )
 
-    @app.get("/products/{sku}", response_class=HTMLResponse)
+    @app.get("/products/{sku:path}", response_class=HTMLResponse)
     async def product(request: Request, sku: str):
         offers = [
             item
@@ -393,7 +394,7 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
         catalog, conflicts = catalog_data()
         return {"items": catalog, "conflict_count": len(conflicts)}
 
-    @app.get("/api/products/{sku}")
+    @app.get("/api/products/{sku:path}")
     async def api_product(sku: str):
         offers = [
             item
@@ -447,7 +448,7 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
             "status": "ok",
             "suppliers": len(settings.suppliers),
             "pending_jobs": current_stats["pending_jobs"],
-            "database": str(settings.database_path),
+            "dead_jobs": current_stats["dead_jobs"],
         }
 
     return app
